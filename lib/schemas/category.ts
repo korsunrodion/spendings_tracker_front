@@ -7,6 +7,7 @@ export const categorySchema = z.object({
   aiDescription: z.string().optional(),
   budget: z.number().optional(),
   group: z.string(),
+  position: z.number().optional(),
   currentAmount: z.number().optional(),
 });
 
@@ -18,7 +19,7 @@ export const categoryGroupSchema = z.object({
   _id: z.string(),
   name: z.string(),
   position: z.number(),
-  categories: z.array(z.string()),
+  categories: z.array(categorySchema),
   deletedAt: z.iso.datetime().optional(),
 });
 
