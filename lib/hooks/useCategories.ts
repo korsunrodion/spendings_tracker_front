@@ -22,7 +22,7 @@ export function useDeleteCategory() {
     mutationFn: (id: string) =>
       apiFetch(`/categories/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["category-groups"] });
     },
   });
 }
@@ -36,9 +36,8 @@ export function useUpdateCategoryName() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       }),
-    onSuccess: (_data, { id }) => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      queryClient.invalidateQueries({ queryKey: ["categories", id] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["category-groups"] });
     },
   });
 }
@@ -52,9 +51,8 @@ export function useUpdateCategoryBudget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ budget }),
       }),
-    onSuccess: (_data, { id }) => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      queryClient.invalidateQueries({ queryKey: ["categories", id] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["category-groups"] });
     },
   });
 }

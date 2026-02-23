@@ -5,10 +5,15 @@ import { Reorder, useDragControls } from "framer-motion";
 import {
   useCategoryGroups,
   useCreateCategoryGroup,
+  useDeleteCategoryGroup,
+  useRenameCategoryGroup,
   useUpdateCategoryGroupPositions,
 } from "@/lib/hooks/useCategoryGroups";
 import {
   useCreateCategory,
+  useDeleteCategory,
+  useUpdateCategoryBudget,
+  useUpdateCategoryName,
   useUpdateCategoryPositions,
 } from "@/lib/hooks/useCategories";
 import type { Category, CategoryGroup } from "@/lib/schemas/category";
@@ -97,9 +102,86 @@ function CategoryRow({
   category: Category;
   onDragHandlePointerDown?: (e: React.PointerEvent) => void;
 }) {
+  const { mutate: updateName } = useUpdateCategoryName();
+  const { mutate: updateBudget } = useUpdateCategoryBudget();
+  const { mutate: deleteCategory } = useDeleteCategory();
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(category.name);
+  const [editBudget, setEditBudget] = useState(String(category.budget ?? ""));
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const budget = category.budget ?? 0;
   const current = category.currentAmount ?? 0;
   const percent = budget > 0 ? (current / budget) * 100 : 0;
+
+  function handleSave() {
+    const newName = editName.trim();
+    if (newName && newName !== category.name) {
+      updateName({ id: category._id, name: newName });
+    }
+    const newBudget = parseFloat(editBudget);
+    if (!isNaN(newBudget) && newBudget !== category.budget) {
+      updateBudget({ id: category._id, budget: newBudget });
+    }
+    setIsEditing(false);
+  }
+
+  function handleDelete() {
+    deleteCategory(category._id);
+    setMenuOpen(false);
+  }
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-3">
+        <div
+          className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center ${getIconColor(
+            category.name
+          )}`}
+        >
+          <span className="text-white text-sm font-bold">
+            {category.name[0].toUpperCase()}
+          </span>
+        </div>
+        <input
+          autoFocus
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSave();
+            else if (e.key === "Escape") setIsEditing(false);
+          }}
+          className="flex-1 min-w-0 text-sm outline-none bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-gray-800"
+          placeholder="Name..."
+        />
+        <input
+          type="number"
+          value={editBudget}
+          onChange={(e) => setEditBudget(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSave();
+            else if (e.key === "Escape") setIsEditing(false);
+          }}
+          className="w-20 flex-shrink-0 text-sm outline-none bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-gray-800"
+          placeholder="Budget"
+        />
+        <button
+          onClick={handleSave}
+          className="text-violet-600 p-0.5 flex-shrink-0 cursor-pointer"
+        >
+          <MdCheck size={18} />
+        </button>
+        <button
+          onClick={() => setIsEditing(false)}
+          className="text-gray-400 p-0.5 flex-shrink-0 cursor-pointer"
+        >
+          <MdClose size={18} />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-3 px-4 py-3">
@@ -140,9 +222,61 @@ function CategoryRow({
         </div>
       </div>
 
-      <button className="text-gray-400 flex-shrink-0 p-0.5 hover:text-gray-600">
-        <MdMoreVert size={18} />
-      </button>
+      <Popover
+        isOpen={menuOpen}
+        onOpenChange={(o) => {
+          setMenuOpen(o);
+          if (!o) setConfirmDelete(false);
+        }}
+        placement="left-start"
+      >
+        <PopoverTrigger>
+          <button className="cursor-pointer text-gray-400 flex-shrink-0 p-0.5 hover:text-gray-600">
+            <MdMoreVert size={18} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="p-1 min-w-[130px]">
+          {!confirmDelete ? (
+            <div className="flex flex-col w-full">
+              <button
+                onClick={() => {
+                  setIsEditing(true);
+                  setMenuOpen(false);
+                }}
+                className="cursor-pointer px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg w-full text-left"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="cursor-pointer px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg w-full text-left"
+              >
+                Delete
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 p-2">
+              <span className="text-xs text-gray-600">
+                Delete this category?
+              </span>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 text-xs bg-red-500 text-white rounded-lg py-1.5 font-medium cursor-pointer"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="flex-1 text-xs bg-gray-100 text-gray-700 rounded-lg py-1.5 font-medium cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -299,7 +433,14 @@ function CategoryGroupCard({
 }) {
   const { mutate: createCategory } = useCreateCategory();
   const { mutate: updateCategoryPositions } = useUpdateCategoryPositions();
+  const { mutate: renameGroup } = useRenameCategoryGroup();
+  const { mutate: deleteGroup } = useDeleteCategoryGroup();
+
   const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editGroupName, setEditGroupName] = useState(group.name);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
 
   const sorted = [...group.categories].sort(
     (a, b) => (a.position ?? 0) - (b.position ?? 0)
@@ -335,26 +476,127 @@ function CategoryGroupCard({
     });
   }
 
+  function handleGroupSave() {
+    const newName = editGroupName.trim();
+    if (newName && newName !== group.name) {
+      renameGroup({ id: group._id, name: newName });
+    }
+    setIsEditingName(false);
+  }
+
+  function handleGroupDelete() {
+    deleteGroup(group._id);
+    setGroupMenuOpen(false);
+  }
+
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-      <div className="flex items-center gap-2 px-4 py-3">
-        <MdDragIndicator
-          size={18}
-          className="text-gray-300 cursor-grab flex-shrink-0 touch-none"
-          onPointerDown={onDragHandlePointerDown}
-        />
-        <span className="text-xs font-bold tracking-widest text-gray-500 uppercase">
-          {group.name}
-        </span>
-        <span className="text-xs bg-violet-100 text-violet-700 font-medium px-2 py-0.5 rounded-full flex-shrink-0">
-          {orderedCategories.length}{" "}
-          {orderedCategories.length === 1 ? "Category" : "Categories"}
-        </span>
-        <div className="flex-1" />
-        <span className="text-sm font-semibold text-gray-700 flex-shrink-0">
-          {formatMoney(totalCurrent)} / {formatMoney(totalBudget)}
-        </span>
-      </div>
+      {/* Group header */}
+      {isEditingName ? (
+        <div className="flex items-center gap-2 px-4 py-3">
+          <MdDragIndicator
+            size={18}
+            className="text-gray-300 cursor-grab flex-shrink-0 touch-none"
+            onPointerDown={onDragHandlePointerDown}
+          />
+          <input
+            autoFocus
+            value={editGroupName}
+            onChange={(e) => setEditGroupName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleGroupSave();
+              else if (e.key === "Escape") setIsEditingName(false);
+            }}
+            className="cursor-pointer flex-1 min-w-0 text-xs font-bold tracking-widest uppercase outline-none bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 text-gray-500"
+          />
+          <button
+            onClick={handleGroupSave}
+            className="text-violet-600 p-0.5 flex-shrink-0 cursor-pointer"
+          >
+            <MdCheck size={18} />
+          </button>
+          <button
+            onClick={() => setIsEditingName(false)}
+            className="cursor-pointer text-gray-400 p-0.5 flex-shrink-0 cursor-pointer"
+          >
+            <MdClose size={18} />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 px-4 py-3">
+          <MdDragIndicator
+            size={18}
+            className="text-gray-300 cursor-grab flex-shrink-0 touch-none"
+            onPointerDown={onDragHandlePointerDown}
+          />
+          <span className="text-xs font-bold tracking-widest text-gray-500 uppercase">
+            {group.name}
+          </span>
+          <span className="text-xs bg-violet-100 text-violet-700 font-medium px-2 py-0.5 rounded-full flex-shrink-0">
+            {orderedCategories.length}{" "}
+            {orderedCategories.length === 1 ? "Category" : "Categories"}
+          </span>
+          <div className="flex-1" />
+          <span className="text-sm font-semibold text-gray-700 flex-shrink-0">
+            {formatMoney(totalCurrent)} / {formatMoney(totalBudget)}
+          </span>
+          <Popover
+            isOpen={groupMenuOpen}
+            onOpenChange={(o) => {
+              setGroupMenuOpen(o);
+              if (!o) setConfirmDeleteGroup(false);
+            }}
+            placement="left-start"
+          >
+            <PopoverTrigger>
+              <button className="cursor-pointer text-gray-400 p-0.5 hover:text-gray-600 flex-shrink-0">
+                <MdMoreVert size={18} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="p-1 min-w-[130px]">
+              {!confirmDeleteGroup ? (
+                <div className="flex flex-col w-full">
+                  <button
+                    onClick={() => {
+                      setIsEditingName(true);
+                      setGroupMenuOpen(false);
+                    }}
+                    className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg w-full text-left"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteGroup(true)}
+                    className="px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg w-full text-left"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 p-2">
+                  <span className="text-xs text-gray-600">
+                    Delete this group?
+                  </span>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={handleGroupDelete}
+                      className="flex-1 text-xs bg-red-500 text-white rounded-lg py-1.5 font-medium cursor-pointer"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteGroup(false)}
+                      className="flex-1 text-xs bg-gray-100 text-gray-700 rounded-lg py-1.5 font-medium cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
 
       <Reorder.Group
         as="div"
