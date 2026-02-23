@@ -17,7 +17,7 @@ export function useUpdateCategoryName() {
   return useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) =>
       apiFetch(`/categories/${id}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       }),
@@ -33,7 +33,7 @@ export function useUpdateCategoryBudget() {
   return useMutation({
     mutationFn: ({ id, budget }: { id: string; budget: number }) =>
       apiFetch(`/categories/${id}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ budget }),
       }),
@@ -47,14 +47,20 @@ export function useUpdateCategoryBudget() {
 export function useUpdateCategoryPositions() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (positions: { _id: string; position: number }[]) =>
-      apiFetch("/categories/positions", {
-        method: "PATCH",
+    mutationFn: ({
+      groupId,
+      positions,
+    }: {
+      groupId: string;
+      positions: { id: string; position: number }[];
+    }) =>
+      apiFetch(`/categories/positions/${groupId}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ positions }),
+        body: JSON.stringify(positions),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["category-groups"] });
     },
   });
 }

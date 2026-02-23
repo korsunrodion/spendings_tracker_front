@@ -1,6 +1,9 @@
 "use client";
 
-import { useCategoryGroups } from "@/lib/hooks/useCategoryGroups";
+import { useState } from "react";
+import { Reorder, useDragControls } from "framer-motion";
+import { useCategoryGroups, useUpdateCategoryGroupPositions } from "@/lib/hooks/useCategoryGroups";
+import { useUpdateCategoryPositions } from "@/lib/hooks/useCategories";
 import type { Category, CategoryGroup } from "@/lib/schemas/category";
 import { Button, Skeleton } from "@heroui/react";
 import {
@@ -57,13 +60,25 @@ function getIconColor(name: string) {
   return ICON_COLORS[Math.abs(h) % ICON_COLORS.length];
 }
 
-function CategoryRow({ category }: { category: Category }) {
+function CategoryRow({
+  category,
+  onDragHandlePointerDown,
+}: {
+  category: Category;
+  onDragHandlePointerDown?: (e: React.PointerEvent) => void;
+}) {
   const budget = category.budget ?? 0;
   const current = category.currentAmount ?? 0;
   const percent = budget > 0 ? (current / budget) * 100 : 0;
 
   return (
     <div className="flex items-center gap-3 px-4 py-3">
+      <MdDragIndicator
+        size={16}
+        className="text-gray-300 cursor-grab flex-shrink-0 touch-none"
+        onPointerDown={onDragHandlePointerDown}
+      />
+
       <div
         className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center ${getIconColor(
           category.name
@@ -102,6 +117,32 @@ function CategoryRow({ category }: { category: Category }) {
   );
 }
 
+function DraggableCategoryRow({
+  category,
+  onDragEnd,
+}: {
+  category: Category;
+  onDragEnd: () => void;
+}) {
+  const controls = useDragControls();
+
+  return (
+    <Reorder.Item
+      as="div"
+      value={category}
+      dragListener={false}
+      dragControls={controls}
+      onDragEnd={onDragEnd}
+      className="list-none"
+    >
+      <CategoryRow
+        category={category}
+        onDragHandlePointerDown={(e) => { e.preventDefault(); controls.start(e); }}
+      />
+    </Reorder.Item>
+  );
+}
+
 function CategoryRowSkeleton() {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
@@ -137,29 +178,52 @@ function GroupSkeleton() {
   );
 }
 
-function CategoryGroupCard({ group }: { group: CategoryGroup }) {
-  const categories = [...group.categories].sort(
+function CategoryGroupCard({
+  group,
+  onDragHandlePointerDown,
+}: {
+  group: CategoryGroup;
+  onDragHandlePointerDown?: (e: React.PointerEvent) => void;
+}) {
+  const { mutate: updateCategoryPositions } = useUpdateCategoryPositions();
+
+  const sorted = [...group.categories].sort(
     (a, b) => (a.position ?? 0) - (b.position ?? 0)
   );
-  const totalBudget = categories.reduce((sum, c) => sum + (c.budget ?? 0), 0);
-  const totalCurrent = categories.reduce(
-    (sum, c) => sum + (c.currentAmount ?? 0),
-    0
-  );
+  const [prevGroup, setPrevGroup] = useState(group);
+  const [orderedCategories, setOrderedCategories] = useState(sorted);
+
+  if (group !== prevGroup) {
+    setPrevGroup(group);
+    setOrderedCategories(
+      [...group.categories].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    );
+  }
+
+  const totalBudget = orderedCategories.reduce((sum, c) => sum + (c.budget ?? 0), 0);
+  const totalCurrent = orderedCategories.reduce((sum, c) => sum + (c.currentAmount ?? 0), 0);
+
+  function handleCategoryDragEnd() {
+    updateCategoryPositions({
+      groupId: group._id,
+      positions: orderedCategories.map((c, i) => ({ id: c._id, position: i + 1 })),
+    });
+  }
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
       <div className="flex items-center gap-2 px-4 py-3">
         <MdDragIndicator
           size={18}
-          className="text-gray-300 cursor-grab flex-shrink-0"
+          className="text-gray-300 cursor-grab flex-shrink-0 touch-none"
+          onPointerDown={onDragHandlePointerDown}
         />
         <span className="text-xs font-bold tracking-widest text-gray-500 uppercase">
           {group.name}
         </span>
         <span className="text-xs bg-violet-100 text-violet-700 font-medium px-2 py-0.5 rounded-full flex-shrink-0">
-          {categories.length}{" "}
-          {categories.length === 1 ? "Category" : "Categories"}
+          {orderedCategories.length}{" "}
+          {orderedCategories.length === 1 ? "Category" : "Categories"}
         </span>
         <div className="flex-1" />
         <span className="text-sm font-semibold text-gray-700 flex-shrink-0">
@@ -167,11 +231,21 @@ function CategoryGroupCard({ group }: { group: CategoryGroup }) {
         </span>
       </div>
 
-      <div className="border-t border-gray-100 divide-y divide-gray-100">
-        {categories.map((cat) => (
-          <CategoryRow key={cat._id} category={cat} />
+      <Reorder.Group
+        as="div"
+        axis="y"
+        values={orderedCategories}
+        onReorder={setOrderedCategories}
+        className="border-t border-gray-100 divide-y divide-gray-100 select-none"
+      >
+        {orderedCategories.map((cat) => (
+          <DraggableCategoryRow
+            key={cat._id}
+            category={cat}
+            onDragEnd={handleCategoryDragEnd}
+          />
         ))}
-      </div>
+      </Reorder.Group>
 
       <div className="border-t border-gray-100 px-4 py-2.5">
         <button className="flex items-center gap-1 text-sm text-violet-600 font-medium hover:text-violet-700 transition-colors">
@@ -183,16 +257,54 @@ function CategoryGroupCard({ group }: { group: CategoryGroup }) {
   );
 }
 
+function DraggableGroupCard({
+  group,
+  onDragEnd,
+}: {
+  group: CategoryGroup;
+  onDragEnd: () => void;
+}) {
+  const controls = useDragControls();
+
+  return (
+    <Reorder.Item
+      as="div"
+      value={group}
+      dragListener={false}
+      dragControls={controls}
+      onDragEnd={onDragEnd}
+      className="list-none"
+    >
+      <CategoryGroupCard
+        group={group}
+        onDragHandlePointerDown={(e) => { e.preventDefault(); controls.start(e); }}
+      />
+    </Reorder.Item>
+  );
+}
+
 export default function CategoriesPage() {
   const { data: groups, isLoading: groupsLoading } = useCategoryGroups();
-  const isLoading = groupsLoading;
+  const { mutate: updateGroupPositions } = useUpdateCategoryGroupPositions();
+
+  const [prevGroups, setPrevGroups] = useState(groups);
+  const [orderedGroups, setOrderedGroups] = useState<CategoryGroup[]>(
+    () => [...(groups ?? [])].sort((a, b) => a.position - b.position)
+  );
+
+  if (groups !== prevGroups) {
+    setPrevGroups(groups);
+    setOrderedGroups([...(groups ?? [])].sort((a, b) => a.position - b.position));
+  }
 
   const now = new Date();
   const monthLabel = `${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
 
-  const sortedGroups = [...(groups ?? [])].sort(
-    (a, b) => a.position - b.position
-  );
+  function handleDragEnd() {
+    updateGroupPositions(
+      orderedGroups.map((g, i) => ({ _id: g._id, position: i + 1 }))
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-full bg-[#f5f3ff]">
@@ -218,6 +330,7 @@ export default function CategoriesPage() {
           </div>
         </div>
       </div>
+
       {/* Page header */}
       <div className="mx-auto max-w-[1024px] w-full">
         <div className="px-4 pt-5 pb-4">
@@ -239,16 +352,28 @@ export default function CategoriesPage() {
 
         {/* Groups list */}
         <div className="flex flex-col gap-3 px-4 pb-6">
-          {isLoading ? (
+          {groupsLoading ? (
             <>
               <GroupSkeleton />
               <GroupSkeleton />
             </>
           ) : (
             <>
-              {sortedGroups.map((group) => (
-                <CategoryGroupCard key={group._id} group={group} />
-              ))}
+              <Reorder.Group
+                as="div"
+                axis="y"
+                values={orderedGroups}
+                onReorder={setOrderedGroups}
+                className="flex flex-col gap-3 select-none"
+              >
+                {orderedGroups.map((group) => (
+                  <DraggableGroupCard
+                    key={group._id}
+                    group={group}
+                    onDragEnd={handleDragEnd}
+                  />
+                ))}
+              </Reorder.Group>
 
               {/* Add group placeholder */}
               <button className="border-2 border-dashed border-violet-200 rounded-2xl p-6 flex flex-col items-center gap-2 text-violet-400 hover:border-violet-300 hover:text-violet-500 transition-colors">

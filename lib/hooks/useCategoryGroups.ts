@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { categoryGroupsSchema, categoryGroupSchema } from "@/lib/schemas/category";
+import {
+  categoryGroupsSchema,
+  categoryGroupSchema,
+} from "@/lib/schemas/category";
 import type { CategoryGroup } from "@/lib/schemas/category";
 
 export function useCategoryGroups() {
@@ -41,7 +44,7 @@ export function useRenameCategoryGroup() {
   return useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) =>
       apiFetch(`/category-groups/${id}`, {
-        method: "PATCH",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       }),
@@ -57,9 +60,9 @@ export function useUpdateCategoryGroupPositions() {
   return useMutation({
     mutationFn: (positions: { _id: string; position: number }[]) =>
       apiFetch("/category-groups/positions", {
-        method: "PATCH",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ positions }),
+        body: JSON.stringify(positions),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["category-groups"] });
