@@ -6,11 +6,18 @@ import {
 } from "@/lib/schemas/category";
 import type { CategoryGroup } from "@/lib/schemas/category";
 
-export function useCategoryGroups() {
+export function useCategoryGroups(params: {
+  startDate: string;
+  endDate: string;
+}) {
   return useQuery<CategoryGroup[]>({
-    queryKey: ["category-groups"],
+    queryKey: ["category-groups", params.startDate, params.endDate],
     queryFn: async () => {
-      const data = await apiFetch<unknown>("/category-groups");
+      const qs = new URLSearchParams({
+        startDate: params.startDate,
+        endDate: params.endDate,
+      });
+      const data = await apiFetch<unknown>(`/category-groups?${qs}`);
       return categoryGroupsSchema.parse(data);
     },
   });

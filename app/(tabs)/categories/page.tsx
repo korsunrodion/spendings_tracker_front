@@ -2,14 +2,25 @@
 
 import { useState } from "react";
 import { Reorder, useDragControls } from "framer-motion";
-import { useCategoryGroups, useUpdateCategoryGroupPositions } from "@/lib/hooks/useCategoryGroups";
+import {
+  useCategoryGroups,
+  useUpdateCategoryGroupPositions,
+} from "@/lib/hooks/useCategoryGroups";
 import { useUpdateCategoryPositions } from "@/lib/hooks/useCategories";
 import type { Category, CategoryGroup } from "@/lib/schemas/category";
-import { Button, Skeleton } from "@heroui/react";
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Skeleton,
+} from "@heroui/react";
 import {
   MdAdd,
   MdMoreVert,
   MdKeyboardArrowDown,
+  MdChevronLeft,
+  MdChevronRight,
   MdDragIndicator,
 } from "react-icons/md";
 
@@ -27,6 +38,19 @@ const MONTHS = [
   "November",
   "December",
 ];
+
+function toDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getMonthRange(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { startDate: toDateString(start), endDate: toDateString(end) };
+}
 
 function formatMoney(n: number) {
   return `$${Math.round(n).toLocaleString()}`;
@@ -137,7 +161,10 @@ function DraggableCategoryRow({
     >
       <CategoryRow
         category={category}
-        onDragHandlePointerDown={(e) => { e.preventDefault(); controls.start(e); }}
+        onDragHandlePointerDown={(e) => {
+          e.preventDefault();
+          controls.start(e);
+        }}
       />
     </Reorder.Item>
   );
@@ -196,17 +223,28 @@ function CategoryGroupCard({
   if (group !== prevGroup) {
     setPrevGroup(group);
     setOrderedCategories(
-      [...group.categories].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+      [...group.categories].sort(
+        (a, b) => (a.position ?? 0) - (b.position ?? 0)
+      )
     );
   }
 
-  const totalBudget = orderedCategories.reduce((sum, c) => sum + (c.budget ?? 0), 0);
-  const totalCurrent = orderedCategories.reduce((sum, c) => sum + (c.currentAmount ?? 0), 0);
+  const totalBudget = orderedCategories.reduce(
+    (sum, c) => sum + (c.budget ?? 0),
+    0
+  );
+  const totalCurrent = orderedCategories.reduce(
+    (sum, c) => sum + (c.currentAmount ?? 0),
+    0
+  );
 
   function handleCategoryDragEnd() {
     updateCategoryPositions({
       groupId: group._id,
-      positions: orderedCategories.map((c, i) => ({ id: c._id, position: i + 1 })),
+      positions: orderedCategories.map((c, i) => ({
+        id: c._id,
+        position: i + 1,
+      })),
     });
   }
 
@@ -277,28 +315,42 @@ function DraggableGroupCard({
     >
       <CategoryGroupCard
         group={group}
-        onDragHandlePointerDown={(e) => { e.preventDefault(); controls.start(e); }}
+        onDragHandlePointerDown={(e) => {
+          e.preventDefault();
+          controls.start(e);
+        }}
       />
     </Reorder.Item>
   );
 }
 
 export default function CategoriesPage() {
-  const { data: groups, isLoading: groupsLoading } = useCategoryGroups();
+  const [selectedDate, setSelectedDate] = useState(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+  );
+
+  const { startDate, endDate } = getMonthRange(selectedDate);
+  const monthLabel = `${
+    MONTHS[selectedDate.getMonth()]
+  } ${selectedDate.getFullYear()}`;
+
+  const { data: groups, isLoading: groupsLoading } = useCategoryGroups({
+    startDate,
+    endDate,
+  });
   const { mutate: updateGroupPositions } = useUpdateCategoryGroupPositions();
 
   const [prevGroups, setPrevGroups] = useState(groups);
-  const [orderedGroups, setOrderedGroups] = useState<CategoryGroup[]>(
-    () => [...(groups ?? [])].sort((a, b) => a.position - b.position)
+  const [orderedGroups, setOrderedGroups] = useState<CategoryGroup[]>(() =>
+    [...(groups ?? [])].sort((a, b) => a.position - b.position)
   );
 
   if (groups !== prevGroups) {
     setPrevGroups(groups);
-    setOrderedGroups([...(groups ?? [])].sort((a, b) => a.position - b.position));
+    setOrderedGroups(
+      [...(groups ?? [])].sort((a, b) => a.position - b.position)
+    );
   }
-
-  const now = new Date();
-  const monthLabel = `${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
 
   function handleDragEnd() {
     updateGroupPositions(
@@ -343,10 +395,41 @@ export default function CategoriesPage() {
                 Organize your spending into groups
               </p>
             </div>
-            <button className="flex items-center gap-1 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm flex-shrink-0 mt-1">
-              {monthLabel}
-              <MdKeyboardArrowDown size={16} />
-            </button>
+            <Popover placement="bottom-end">
+              <PopoverTrigger>
+                <button className="flex items-center gap-1 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5 shadow-sm flex-shrink-0 mt-1">
+                  {monthLabel}
+                  <MdKeyboardArrowDown size={16} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent>
+                <div className="flex items-center gap-2 px-1 py-1">
+                  <button
+                    className="p-1 rounded hover:bg-gray-100 text-gray-600"
+                    onClick={() =>
+                      setSelectedDate(
+                        (d) => new Date(d.getFullYear(), d.getMonth() - 1, 1)
+                      )
+                    }
+                  >
+                    <MdChevronLeft size={20} />
+                  </button>
+                  <span className="text-sm font-medium w-32 text-center text-black">
+                    {monthLabel}
+                  </span>
+                  <button
+                    className="p-1 rounded hover:bg-gray-100 text-gray-600"
+                    onClick={() =>
+                      setSelectedDate(
+                        (d) => new Date(d.getFullYear(), d.getMonth() + 1, 1)
+                      )
+                    }
+                  >
+                    <MdChevronRight size={20} />
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
 
