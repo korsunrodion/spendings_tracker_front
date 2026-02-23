@@ -4,9 +4,13 @@ import { useState } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import {
   useCategoryGroups,
+  useCreateCategoryGroup,
   useUpdateCategoryGroupPositions,
 } from "@/lib/hooks/useCategoryGroups";
-import { useUpdateCategoryPositions } from "@/lib/hooks/useCategories";
+import {
+  useCreateCategory,
+  useUpdateCategoryPositions,
+} from "@/lib/hooks/useCategories";
 import type { Category, CategoryGroup } from "@/lib/schemas/category";
 import {
   Button,
@@ -17,6 +21,8 @@ import {
 } from "@heroui/react";
 import {
   MdAdd,
+  MdCheck,
+  MdClose,
   MdMoreVert,
   MdKeyboardArrowDown,
   MdChevronLeft,
@@ -141,6 +147,85 @@ function CategoryRow({
   );
 }
 
+function AddCategoryInput({
+  onSubmit,
+  onCancel,
+}: {
+  onSubmit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState("");
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && value.trim()) onSubmit(value.trim());
+    else if (e.key === "Escape") onCancel();
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5">
+      <div className="w-9 h-9 rounded-full bg-gray-100 flex-shrink-0 flex items-center justify-center">
+        <MdAdd size={16} className="text-gray-400" />
+      </div>
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Category name..."
+        className="cursor-pointer flex-1 min-w-0 text-sm outline-none bg-transparent text-gray-800 placeholder-gray-400"
+      />
+      <button
+        onClick={() => value.trim() && onSubmit(value.trim())}
+        disabled={!value.trim()}
+        className="text-violet-600 p-0.5 disabled:opacity-30 cursor-pointer"
+      >
+        <MdCheck size={18} />
+      </button>
+      <button onClick={onCancel} className="text-gray-400 p-0.5 cursor-pointer">
+        <MdClose size={18} />
+      </button>
+    </div>
+  );
+}
+
+function AddGroupInput({
+  onSubmit,
+  onCancel,
+}: {
+  onSubmit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState("");
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && value.trim()) onSubmit(value.trim());
+    else if (e.key === "Escape") onCancel();
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border-2 border-violet-300 px-4 py-3 flex items-center gap-2">
+      <input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Group name..."
+        className="cursor-pointer flex-1 min-w-0 text-sm font-medium outline-none bg-transparent text-gray-800 placeholder-gray-400"
+      />
+      <button
+        onClick={() => value.trim() && onSubmit(value.trim())}
+        disabled={!value.trim()}
+        className="text-violet-600 p-0.5 disabled:opacity-30 cursor-pointer"
+      >
+        <MdCheck size={18} />
+      </button>
+      <button onClick={onCancel} className="text-gray-400 p-0.5 cursor-pointer">
+        <MdClose size={18} />
+      </button>
+    </div>
+  );
+}
+
 function DraggableCategoryRow({
   category,
   onDragEnd,
@@ -212,7 +297,9 @@ function CategoryGroupCard({
   group: CategoryGroup;
   onDragHandlePointerDown?: (e: React.PointerEvent) => void;
 }) {
+  const { mutate: createCategory } = useCreateCategory();
   const { mutate: updateCategoryPositions } = useUpdateCategoryPositions();
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
 
   const sorted = [...group.categories].sort(
     (a, b) => (a.position ?? 0) - (b.position ?? 0)
@@ -285,11 +372,28 @@ function CategoryGroupCard({
         ))}
       </Reorder.Group>
 
-      <div className="border-t border-gray-100 px-4 py-2.5">
-        <button className="flex items-center gap-1 text-sm text-violet-600 font-medium hover:text-violet-700 transition-colors">
-          <MdAdd size={16} />
-          <span>Add Category to Group</span>
-        </button>
+      <div className="border-t border-gray-100">
+        {isAddingCategory ? (
+          <AddCategoryInput
+            onSubmit={(name) =>
+              createCategory(
+                { name, groupId: group._id },
+                { onSuccess: () => setIsAddingCategory(false) }
+              )
+            }
+            onCancel={() => setIsAddingCategory(false)}
+          />
+        ) : (
+          <div className="px-4 py-2.5">
+            <button
+              onClick={() => setIsAddingCategory(true)}
+              className="flex items-center gap-1 text-sm text-violet-600 font-medium hover:text-violet-700 transition-colors"
+            >
+              <MdAdd size={16} />
+              <span>Add Category to Group</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -338,7 +442,9 @@ export default function CategoriesPage() {
     startDate,
     endDate,
   });
+  const { mutate: createGroup } = useCreateCategoryGroup();
   const { mutate: updateGroupPositions } = useUpdateCategoryGroupPositions();
+  const [isAddingGroup, setIsAddingGroup] = useState(false);
 
   const [prevGroups, setPrevGroups] = useState(groups);
   const [orderedGroups, setOrderedGroups] = useState<CategoryGroup[]>(() =>
@@ -375,6 +481,7 @@ export default function CategoriesPage() {
               variant="bordered"
               color="secondary"
               startContent={<MdAdd size={15} />}
+              onPress={() => setIsAddingGroup(true)}
             >
               Add Group
             </Button>
@@ -458,15 +565,29 @@ export default function CategoriesPage() {
                 ))}
               </Reorder.Group>
 
-              {/* Add group placeholder */}
-              <button className="border-2 border-dashed border-violet-200 rounded-2xl p-6 flex flex-col items-center gap-2 text-violet-400 hover:border-violet-300 hover:text-violet-500 transition-colors">
-                <div className="w-10 h-10 rounded-full bg-violet-50 flex items-center justify-center">
-                  <MdAdd size={22} className="text-violet-400" />
-                </div>
-                <span className="text-sm font-medium">
-                  Create Category Group
-                </span>
-              </button>
+              {/* Add group */}
+              {isAddingGroup ? (
+                <AddGroupInput
+                  onSubmit={(name) =>
+                    createGroup(name, {
+                      onSuccess: () => setIsAddingGroup(false),
+                    })
+                  }
+                  onCancel={() => setIsAddingGroup(false)}
+                />
+              ) : (
+                <button
+                  onClick={() => setIsAddingGroup(true)}
+                  className="border-2 border-dashed border-violet-200 rounded-2xl p-6 flex flex-col items-center gap-2 text-violet-400 hover:border-violet-300 hover:text-violet-500 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-full bg-violet-50 flex items-center justify-center">
+                    <MdAdd size={22} className="text-violet-400" />
+                  </div>
+                  <span className="text-sm font-medium">
+                    Create Category Group
+                  </span>
+                </button>
+              )}
             </>
           )}
         </div>

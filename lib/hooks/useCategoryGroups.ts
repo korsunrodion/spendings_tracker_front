@@ -34,6 +34,21 @@ export function useCategoryGroup(id: string) {
   });
 }
 
+export function useCreateCategoryGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) =>
+      apiFetch("/category-groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["category-groups"] });
+    },
+  });
+}
+
 export function useDeleteCategoryGroup() {
   const queryClient = useQueryClient();
   return useMutation({

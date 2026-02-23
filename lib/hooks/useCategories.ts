@@ -1,6 +1,21 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
+export function useCreateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, groupId }: { name: string; groupId: string }) =>
+      apiFetch("/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, group: groupId }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["category-groups"] });
+    },
+  });
+}
+
 export function useDeleteCategory() {
   const queryClient = useQueryClient();
   return useMutation({
