@@ -125,6 +125,39 @@ function groupTransactions(transactions: Transaction[]) {
   return [...map.values()].sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
+function PrivatLogo() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <rect width="20" height="20" rx="4" fill="#009966" />
+      <text x="10" y="14" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold" fontFamily="Arial">P</text>
+    </svg>
+  );
+}
+
+function MonoLogo() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+      <rect width="20" height="20" rx="4" fill="#1a1a2e" />
+      {/* cat ears */}
+      <polygon points="3,9 6,4 9,9" fill="white" />
+      <polygon points="11,9 14,4 17,9" fill="white" />
+      {/* cat face */}
+      <ellipse cx="10" cy="12" rx="7" ry="6" fill="white" />
+      <circle cx="7.5" cy="11.5" r="1" fill="#1a1a2e" />
+      <circle cx="12.5" cy="11.5" r="1" fill="#1a1a2e" />
+      <path d="M8.5 14 Q10 15.5 11.5 14" stroke="#1a1a2e" strokeWidth="0.8" strokeLinecap="round" fill="none" />
+    </svg>
+  );
+}
+
+function BankBadge({ source }: { source: "privat" | "mono" }) {
+  return (
+    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded drop-shadow-sm">
+      {source === "privat" ? <PrivatLogo /> : <MonoLogo />}
+    </div>
+  );
+}
+
 function TransactionRow({
   transaction,
   categories,
@@ -137,17 +170,26 @@ function TransactionRow({
 
   const isPositive = transaction.sum > 0;
   const time = transaction.date ? formatTime(transaction.date) : "";
+  const isUnclassified =
+    transaction.category.name.toLowerCase() === "unclassified";
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3.5">
-      <div
-        className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center ${getIconColor(
-          transaction.category.name
-        )}`}
-      >
-        <span className="text-white text-sm font-bold">
-          {transaction.category.name[0].toUpperCase()}
-        </span>
+    <div
+      className={`flex items-center gap-3 px-4 py-3.5 ${
+        isUnclassified ? "bg-amber-50 border-l-2 border-amber-400" : ""
+      }`}
+    >
+      <div className="relative flex-shrink-0">
+        <div
+          className={`w-10 h-10 rounded-full flex items-center justify-center ${getIconColor(
+            transaction.category.name
+          )}`}
+        >
+          <span className="text-white text-sm font-bold">
+            {transaction.category.name[0].toUpperCase()}
+          </span>
+        </div>
+        {transaction.source && <BankBadge source={transaction.source} />}
       </div>
 
       <div className="flex-1 min-w-0">

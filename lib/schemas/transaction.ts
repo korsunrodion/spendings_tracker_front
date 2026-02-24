@@ -8,6 +8,7 @@ export const transactionSchema = z.object({
   subCategory: z.string().optional(),
   sum: z.number(),
   date: z.string().optional(),
+  source: z.enum(["privat", "mono"]).optional(),
 });
 
 export type Transaction = z.infer<typeof transactionSchema>;
