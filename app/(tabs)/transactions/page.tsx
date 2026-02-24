@@ -1,22 +1,416 @@
 "use client";
 
-import { Card, CardBody, CardHeader, Divider } from "@heroui/react";
-import { MdReceiptLong } from "react-icons/md";
+import { Suspense, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Skeleton,
+} from "@heroui/react";
+import {
+  MdChevronLeft,
+  MdChevronRight,
+  MdTune,
+  MdReceiptLong,
+} from "react-icons/md";
+import { useCategoryGroups } from "@/lib/hooks/useCategoryGroups";
+import {
+  useEditTransaction,
+  useTransactions,
+} from "@/lib/hooks/useTransactions";
+import type { Transaction } from "@/lib/schemas/transaction";
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+function toDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getMonthRange(date: Date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), 1);
+  const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  return { startDate: toDateString(start), endDate: toDateString(end) };
+}
+
+function formatAmount(n: number) {
+  return `₴${Math.abs(n).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatTime(dateStr: string) {
+  return new Date(dateStr).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const ICON_COLORS = [
+  "bg-red-400",
+  "bg-orange-400",
+  "bg-violet-500",
+  "bg-pink-400",
+  "bg-blue-400",
+  "bg-amber-500",
+  "bg-indigo-500",
+];
+
+function getIconColor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return ICON_COLORS[Math.abs(h) % ICON_COLORS.length];
+}
+
+function isSameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function getDateKey(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function getDateLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  const today = new Date();
+  if (isSameDay(date, today)) return "Today";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+  });
+}
+
+function groupTransactions(transactions: Transaction[]) {
+  const map = new Map<
+    string,
+    { label: string; date: Date; items: Transaction[] }
+  >();
+
+  for (const tx of transactions) {
+    if (!tx.date) continue;
+    const key = getDateKey(tx.date);
+    if (!map.has(key)) {
+      map.set(key, {
+        label: getDateLabel(tx.date),
+        date: new Date(tx.date),
+        items: [],
+      });
+    }
+    map.get(key)!.items.push(tx);
+  }
+
+  return [...map.values()].sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
+function TransactionRow({
+  transaction,
+  categories,
+}: {
+  transaction: Transaction;
+  categories: { _id: string; name: string }[];
+}) {
+  const { mutate: editTransaction } = useEditTransaction();
+  const [editingCategory, setEditingCategory] = useState(false);
+
+  const isPositive = transaction.sum > 0;
+  const time = transaction.date ? formatTime(transaction.date) : "";
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3.5">
+      <div
+        className={`w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center ${getIconColor(
+          transaction.category.name
+        )}`}
+      >
+        <span className="text-white text-sm font-bold">
+          {transaction.category.name[0].toUpperCase()}
+        </span>
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-800 truncate">
+          {transaction.description}
+        </p>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {time && `${time} • `}
+          {editingCategory ? (
+            <select
+              autoFocus
+              defaultValue={transaction.category._id}
+              onChange={(e) => {
+                editTransaction(
+                  { id: transaction._id, category: e.target.value },
+                  { onSettled: () => setEditingCategory(false) }
+                );
+              }}
+              onBlur={() => setEditingCategory(false)}
+              className="text-violet-500 text-xs outline-none bg-transparent cursor-pointer"
+            >
+              {categories.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span
+              className="text-violet-500 cursor-pointer hover:text-violet-700"
+              onClick={() => setEditingCategory(true)}
+            >
+              {transaction.category.name}
+            </span>
+          )}
+        </p>
+      </div>
+
+      <span
+        className={`text-sm font-bold flex-shrink-0 ${
+          isPositive ? "text-green-500" : "text-red-500"
+        }`}
+      >
+        {isPositive ? "+" : "-"}
+        {formatAmount(transaction.sum)}
+      </span>
+    </div>
+  );
+}
+
+function TransactionRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3.5">
+      <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+      <div className="flex-1">
+        <Skeleton className="h-4 w-40 rounded mb-1.5" />
+        <Skeleton className="h-3 w-24 rounded" />
+      </div>
+      <Skeleton className="h-4 w-16 rounded" />
+    </div>
+  );
+}
+
+function TransactionsContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const category = searchParams.get("category") ?? "";
+
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const fromParam = searchParams.get("from");
+    if (fromParam) {
+      const d = new Date(fromParam + "T00:00:00");
+      if (!isNaN(d.getTime()))
+        return new Date(d.getFullYear(), d.getMonth(), 1);
+    }
+    return new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  });
+
+  const { startDate, endDate } = getMonthRange(selectedDate);
+  const monthLabel = `${MONTHS[selectedDate.getMonth()].slice(
+    0,
+    3
+  )} ${selectedDate.getFullYear()}`;
+
+  function setMonth(date: Date) {
+    setSelectedDate(date);
+    const { startDate: from, endDate: to } = getMonthRange(date);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("from", from);
+    params.set("to", to);
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+
+  function setCategory(id: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id) params.set("category", id);
+    else params.delete("category");
+    router.replace(`${pathname}?${params.toString()}`);
+  }
+
+  const { data: groups } = useCategoryGroups({ startDate, endDate });
+  const allCategories = groups?.flatMap((g) => g.categories) ?? [];
+
+  const {
+    data: transactions,
+    isLoading,
+    isError,
+  } = useTransactions({
+    category: category || undefined,
+    from: startDate,
+    to: endDate,
+  });
+
+  const grouped = groupTransactions(transactions ?? []);
+
+  return (
+    <div className="flex flex-col min-h-full bg-[#f5f3ff]">
+      {/* Header */}
+      <div className="bg-white">
+        <div className="flex items-center justify-between py-5 px-4 max-w-[1024px] mx-auto">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-xs font-bold">FF</span>
+            </div>
+            <span className="font-semibold text-gray-900">Transactions</span>
+          </div>
+          <div className="w-8 h-8 bg-amber-200 rounded-full flex-shrink-0" />
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="px-4 py-3 flex items-center gap-2 max-w-[1024px] mx-auto">
+          <div className="relative flex-1 min-w-0">
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 outline-none appearance-none cursor-pointer"
+            >
+              <option value="">All categories</option>
+              {allCategories.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+              <svg
+                className="w-4 h-4 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </div>
+          </div>
+
+          <Popover placement="bottom-end">
+            <PopoverTrigger>
+              <button className="flex items-center gap-1.5 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 flex-shrink-0 cursor-pointer">
+                <MdTune size={16} className="text-gray-500" />
+                {monthLabel}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent>
+              <div className="flex items-center gap-2 px-1 py-1">
+                <button
+                  className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer"
+                  onClick={() =>
+                    setMonth(
+                      new Date(
+                        selectedDate.getFullYear(),
+                        selectedDate.getMonth() - 1,
+                        1
+                      )
+                    )
+                  }
+                >
+                  <MdChevronLeft size={20} />
+                </button>
+                <span className="text-sm font-medium w-32 text-center text-black">
+                  {MONTHS[selectedDate.getMonth()]} {selectedDate.getFullYear()}
+                </span>
+                <button
+                  className="p-1 rounded hover:bg-gray-100 text-gray-600 cursor-pointer"
+                  onClick={() =>
+                    setMonth(
+                      new Date(
+                        selectedDate.getFullYear(),
+                        selectedDate.getMonth() + 1,
+                        1
+                      )
+                    )
+                  }
+                >
+                  <MdChevronRight size={20} />
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      {/* Transactions list */}
+      <div className="flex-1 max-w-[1024px] w-full mx-auto px-4 py-4 flex flex-col gap-4">
+        {isError ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-red-400 py-20">
+            <MdReceiptLong size={40} />
+            <span className="text-sm">Failed to load transactions</span>
+          </div>
+        ) : isLoading ? (
+          <>
+            {[1, 2].map((g) => (
+              <div key={g}>
+                <div className="h-3 w-20 bg-gray-200 rounded mb-2 animate-pulse" />
+                <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+                  {[1, 2, 3].map((i) => (
+                    <TransactionRowSkeleton key={i} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        ) : grouped.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-400 py-20">
+            <MdReceiptLong size={40} />
+            <span className="text-sm">No transactions found</span>
+          </div>
+        ) : (
+          grouped.map(({ label, items }) => (
+            <div key={label}>
+              <p className="text-xs font-bold tracking-widest text-gray-500 uppercase mb-2">
+                {label}
+              </p>
+              <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+                {items.map((tx) => (
+                  <TransactionRow
+                    key={tx._id}
+                    transaction={tx}
+                    categories={allCategories}
+                  />
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function TransactionsPage() {
   return (
-    <div className="p-4 flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">Transactions</h1>
-      <Card>
-        <CardHeader className="flex gap-3">
-          <MdReceiptLong size={24} className="text-primary" />
-          <span className="text-lg font-semibold">Recent</span>
-        </CardHeader>
-        <Divider />
-        <CardBody>
-          <p className="text-default-500">Your transactions will appear here.</p>
-        </CardBody>
-      </Card>
-    </div>
+    <Suspense>
+      <TransactionsContent />
+    </Suspense>
   );
 }

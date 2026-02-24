@@ -6,7 +6,7 @@ export const categorySchema = z.object({
   subCategories: z.array(z.string()).optional(),
   aiDescription: z.string().optional(),
   budget: z.number().optional(),
-  group: z.string(),
+  group: z.string().optional(),
   position: z.number().optional(),
   currentAmount: z.number().optional(),
 });
@@ -20,6 +20,7 @@ export const categoryGroupSchema = z.object({
   name: z.string(),
   position: z.number(),
   categories: z.array(categorySchema),
+  type: z.enum(["income", "expense"]),
   deletedAt: z.iso.datetime().optional(),
 });
 

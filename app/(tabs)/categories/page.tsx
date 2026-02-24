@@ -64,7 +64,7 @@ function getMonthRange(date: Date) {
 }
 
 function formatMoney(n: number) {
-  return `$${Math.round(n).toLocaleString()}`;
+  return `₴${Math.round(Math.abs(n)).toLocaleString()}`;
 }
 
 function getBarColor(percent: number) {
@@ -114,7 +114,7 @@ function CategoryRow({
 
   const budget = category.budget ?? 0;
   const current = category.currentAmount ?? 0;
-  const percent = budget > 0 ? (current / budget) * 100 : 0;
+  const percent = budget > 0 ? (current / budget) * 100 : 100;
 
   function handleSave() {
     const newName = editName.trim();
