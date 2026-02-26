@@ -9,13 +9,20 @@ import type { CategoryGroup } from "@/lib/schemas/category";
 export function useCategoryGroups(params: {
   startDate: string;
   endDate: string;
+  type?: "expense" | "income" | "all";
 }) {
   return useQuery<CategoryGroup[]>({
-    queryKey: ["category-groups", params.startDate, params.endDate],
+    queryKey: [
+      "category-groups",
+      params.startDate,
+      params.endDate,
+      params.type,
+    ],
     queryFn: async () => {
       const qs = new URLSearchParams({
         startDate: params.startDate,
         endDate: params.endDate,
+        type: params.type ?? "all",
       });
       const data = await apiFetch<unknown>(`/category-groups?${qs}`);
       return categoryGroupsSchema.parse(data);

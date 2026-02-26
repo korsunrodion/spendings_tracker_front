@@ -34,11 +34,40 @@ export function useTransactions(params?: UseTransactionsParams) {
 export function useEditTransaction() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, category }: { id: string; category: string }) =>
+    mutationFn: ({
+      id,
+      category,
+      note,
+    }: {
+      id: string;
+      category: string;
+      note?: string;
+    }) =>
       apiFetch(`/transactions/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category }),
+        body: JSON.stringify({ category, ...(note !== undefined && { note }) }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+}
+
+export function useEditCategoryByDescription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      description,
+      categoryName,
+    }: {
+      description: string;
+      categoryName: string;
+    }) =>
+      apiFetch(`/transaction-descriptions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description, categoryName }),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });

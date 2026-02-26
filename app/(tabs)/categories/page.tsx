@@ -98,9 +98,11 @@ function getIconColor(name: string) {
 function CategoryRow({
   category,
   onDragHandlePointerDown,
+  isIncome = false,
 }: {
   category: Category;
   onDragHandlePointerDown?: (e: React.PointerEvent) => void;
+  isIncome?: boolean;
 }) {
   const { mutate: updateName } = useUpdateCategoryName();
   const { mutate: updateBudget } = useUpdateCategoryBudget();
@@ -114,7 +116,7 @@ function CategoryRow({
 
   const budget = category.budget ?? 0;
   const current = category.currentAmount ?? 0;
-  const percent = budget > 0 ? (current / budget) * 100 : 100;
+  const percent = budget > 0 ? Math.abs(current / budget) * 100 : 0;
 
   function handleSave() {
     const newName = editName.trim();
@@ -205,22 +207,32 @@ function CategoryRow({
         {category.name}
       </span>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-medium text-violet-600">
-            {formatMoney(current)} of {formatMoney(budget)}
-          </span>
-          <span className={`text-xs font-semibold ${getPercentColor(percent)}`}>
-            {Math.round(percent)}%
+      {isIncome ? (
+        <div className="flex-1 min-w-0 flex justify-end pr-1">
+          <span className="text-sm font-semibold text-green-600">
+            +{formatMoney(current)}
           </span>
         </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full ${getBarColor(percent)}`}
-            style={{ width: `${Math.min(percent, 100)}%` }}
-          />
+      ) : (
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-violet-600">
+              {formatMoney(current)} of {formatMoney(budget)}
+            </span>
+            <span
+              className={`text-xs font-semibold ${getPercentColor(percent)}`}
+            >
+              {Math.round(percent)}%
+            </span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${getBarColor(percent)}`}
+              style={{ width: `${Math.min(percent, 100)}%` }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <Popover
         isOpen={menuOpen}
@@ -363,9 +375,11 @@ function AddGroupInput({
 function DraggableCategoryRow({
   category,
   onDragEnd,
+  isIncome = false,
 }: {
   category: Category;
   onDragEnd: () => void;
+  isIncome?: boolean;
 }) {
   const controls = useDragControls();
 
@@ -380,6 +394,7 @@ function DraggableCategoryRow({
     >
       <CategoryRow
         category={category}
+        isIncome={isIncome}
         onDragHandlePointerDown={(e) => {
           e.preventDefault();
           controls.start(e);
@@ -489,8 +504,14 @@ function CategoryGroupCard({
     setGroupMenuOpen(false);
   }
 
+  const isIncome = group.type === "income";
+
   return (
-    <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+    <div
+      className={`rounded-2xl overflow-hidden shadow-sm ${
+        isIncome ? "bg-green-50" : "bg-white"
+      }`}
+    >
       {/* Group header */}
       {isEditingName ? (
         <div className="flex items-center gap-2 px-4 py-3">
@@ -609,6 +630,7 @@ function CategoryGroupCard({
           <DraggableCategoryRow
             key={cat._id}
             category={cat}
+            isIncome={isIncome}
             onDragEnd={handleCategoryDragEnd}
           />
         ))}

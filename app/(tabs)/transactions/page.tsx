@@ -16,6 +16,7 @@ import {
 } from "react-icons/md";
 import { useCategoryGroups } from "@/lib/hooks/useCategoryGroups";
 import {
+  useEditCategoryByDescription,
   useEditTransaction,
   useTransactions,
 } from "@/lib/hooks/useTransactions";
@@ -127,16 +128,36 @@ function groupTransactions(transactions: Transaction[]) {
 
 function PrivatLogo() {
   return (
-    <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-full h-full"
+    >
       <rect width="20" height="20" rx="4" fill="#009966" />
-      <text x="10" y="14" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold" fontFamily="Arial">P</text>
+      <text
+        x="10"
+        y="14"
+        textAnchor="middle"
+        fill="white"
+        fontSize="11"
+        fontWeight="bold"
+        fontFamily="Arial"
+      >
+        P
+      </text>
     </svg>
   );
 }
 
 function MonoLogo() {
   return (
-    <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="w-full h-full"
+    >
       <rect width="20" height="20" rx="4" fill="#1a1a2e" />
       {/* cat ears */}
       <polygon points="3,9 6,4 9,9" fill="white" />
@@ -145,7 +166,13 @@ function MonoLogo() {
       <ellipse cx="10" cy="12" rx="7" ry="6" fill="white" />
       <circle cx="7.5" cy="11.5" r="1" fill="#1a1a2e" />
       <circle cx="12.5" cy="11.5" r="1" fill="#1a1a2e" />
-      <path d="M8.5 14 Q10 15.5 11.5 14" stroke="#1a1a2e" strokeWidth="0.8" strokeLinecap="round" fill="none" />
+      <path
+        d="M8.5 14 Q10 15.5 11.5 14"
+        stroke="#1a1a2e"
+        strokeWidth="0.8"
+        strokeLinecap="round"
+        fill="none"
+      />
     </svg>
   );
 }
@@ -160,18 +187,58 @@ function BankBadge({ source }: { source: "privat" | "mono" }) {
 
 function TransactionRow({
   transaction,
-  categories,
+  expenseCategories,
+  incomeCategories,
 }: {
   transaction: Transaction;
-  categories: { _id: string; name: string }[];
+  expenseCategories: { _id: string; name: string }[];
+  incomeCategories: { _id: string; name: string }[];
 }) {
-  const { mutate: editTransaction } = useEditTransaction();
+  const categories = transaction.sum > 0 ? incomeCategories : expenseCategories;
+  const { mutate: editTransaction, isPending: isSaving } = useEditTransaction();
+  const { mutate: editByDescription, isPending: isSavingAll } =
+    useEditCategoryByDescription();
   const [editingCategory, setEditingCategory] = useState(false);
+  const [pendingCategory, setPendingCategory] = useState(transaction.category);
+  const [pendingNote, setPendingNote] = useState(transaction.note ?? "");
 
   const isPositive = transaction.sum > 0;
   const time = transaction.date ? formatTime(transaction.date) : "";
   const isUnclassified =
     transaction.category.name.toLowerCase() === "unclassified";
+  const isBusy = isSaving || isSavingAll;
+
+  function handleSave() {
+    editTransaction(
+      { id: transaction._id, category: pendingCategory._id, note: pendingNote },
+      { onSettled: () => setEditingCategory(false) }
+    );
+  }
+
+  function handleSaveAll() {
+    editByDescription(
+      {
+        description: transaction.description,
+        categoryName: pendingCategory.name,
+      },
+      { onSettled: () => setEditingCategory(false) }
+    );
+  }
+
+  function handleStartEdit() {
+    const validName = categories.find(
+      (c) => c.name === transaction.category.name
+    )
+      ? transaction.category
+      : categories[0] ?? transaction.category;
+    setPendingCategory(validName);
+    setPendingNote(transaction.note ?? "");
+    setEditingCategory(true);
+  }
+
+  function handleCancel() {
+    setEditingCategory(false);
+  }
 
   return (
     <div
@@ -196,36 +263,77 @@ function TransactionRow({
         <p className="text-sm font-semibold text-gray-800 truncate">
           {transaction.description}
         </p>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {time && `${time} • `}
+        <div className="text-xs text-gray-400 mt-0.5">
           {editingCategory ? (
-            <select
-              autoFocus
-              defaultValue={transaction.category._id}
-              onChange={(e) => {
-                editTransaction(
-                  { id: transaction._id, category: e.target.value },
-                  { onSettled: () => setEditingCategory(false) }
-                );
-              }}
-              onBlur={() => setEditingCategory(false)}
-              className="text-violet-500 text-xs outline-none bg-transparent cursor-pointer"
-            >
-              {categories.map((cat) => (
-                <option key={cat._id} value={cat._id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1">
+                {time && <span>{time} • </span>}
+                <select
+                  autoFocus
+                  value={pendingCategory.name}
+                  onChange={(e) =>
+                    setPendingCategory(
+                      categories.find((c) => c._id === e.target.value) ??
+                        categories[0]
+                    )
+                  }
+                  className="text-violet-500 text-xs outline-none bg-transparent cursor-pointer"
+                >
+                  {categories.map((cat) => (
+                    <option key={cat._id} value={cat._id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <input
+                type="text"
+                value={pendingNote}
+                onChange={(e) => setPendingNote(e.target.value)}
+                placeholder="Add a note…"
+                className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 outline-none focus:border-violet-400 w-full"
+              />
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleSave}
+                  disabled={isBusy}
+                  className="px-2 py-0.5 text-xs font-medium bg-violet-500 text-white rounded-full hover:bg-violet-600 disabled:opacity-50 cursor-pointer"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleSaveAll}
+                  disabled={isBusy}
+                  className="px-2 py-0.5 text-xs font-medium bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 cursor-pointer"
+                >
+                  Save all with description
+                </button>
+                <button
+                  onClick={handleCancel}
+                  disabled={isBusy}
+                  className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded-full hover:bg-gray-300 disabled:opacity-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           ) : (
-            <span
-              className="text-violet-500 cursor-pointer hover:text-violet-700"
-              onClick={() => setEditingCategory(true)}
-            >
-              {transaction.category.name}
-            </span>
+            <>
+              {time && `${time} • `}
+              <span
+                className="text-violet-500 cursor-pointer hover:text-violet-700"
+                onClick={handleStartEdit}
+              >
+                {transaction.category.name}
+              </span>
+              {transaction.note && (
+                <span className="ml-1.5 text-gray-400 italic">
+                  — {transaction.note}
+                </span>
+              )}
+            </>
           )}
-        </p>
+        </div>
       </div>
 
       <span
@@ -292,8 +400,19 @@ function TransactionsContent() {
     router.replace(`${pathname}?${params.toString()}`);
   }
 
-  const { data: groups } = useCategoryGroups({ startDate, endDate });
-  const allCategories = groups?.flatMap((g) => g.categories) ?? [];
+  const { data: expenseGroups } = useCategoryGroups({
+    startDate,
+    endDate,
+    type: "expense",
+  });
+  const { data: incomeGroups } = useCategoryGroups({
+    startDate,
+    endDate,
+    type: "income",
+  });
+  const expenseCategories = expenseGroups?.flatMap((g) => g.categories) ?? [];
+  const incomeCategories = incomeGroups?.flatMap((g) => g.categories) ?? [];
+  const allCategories = [...expenseCategories, ...incomeCategories];
 
   const {
     data: transactions,
@@ -437,7 +556,8 @@ function TransactionsContent() {
                   <TransactionRow
                     key={tx._id}
                     transaction={tx}
-                    categories={allCategories}
+                    expenseCategories={expenseCategories}
+                    incomeCategories={incomeCategories}
                   />
                 ))}
               </div>

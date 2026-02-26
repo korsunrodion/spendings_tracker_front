@@ -4,6 +4,7 @@ import { categorySchema } from "./category";
 export const transactionSchema = z.object({
   _id: z.string(),
   description: z.string(),
+  note: z.string().nullish(),
   category: categorySchema,
   subCategory: z.string().optional(),
   sum: z.number(),
