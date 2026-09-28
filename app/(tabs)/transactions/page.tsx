@@ -20,6 +20,7 @@ import {
   useEditTransaction,
   useTransactions,
 } from "@/lib/hooks/useTransactions";
+import { StatsCards } from "@/components/StatsCards";
 import type { Transaction } from "@/lib/schemas/transaction";
 
 const MONTHS = [
@@ -189,10 +190,14 @@ function TransactionRow({
   transaction,
   expenseCategories,
   incomeCategories,
+  isFirst,
+  isLast,
 }: {
   transaction: Transaction;
   expenseCategories: { _id: string; name: string }[];
   incomeCategories: { _id: string; name: string }[];
+  isFirst?: boolean;
+  isLast?: boolean;
 }) {
   const categories = transaction.sum > 0 ? incomeCategories : expenseCategories;
   const { mutate: editTransaction, isPending: isSaving } = useEditTransaction();
@@ -226,12 +231,12 @@ function TransactionRow({
   }
 
   function handleStartEdit() {
-    const validName = categories.find(
-      (c) => c.name === transaction.category.name
-    )
-      ? transaction.category
-      : categories[0] ?? transaction.category;
-    setPendingCategory(validName);
+    const matched =
+      categories.find((c) => c._id === transaction.category._id) ??
+      categories.find((c) => c.name === transaction.category.name) ??
+      categories[0] ??
+      transaction.category;
+    setPendingCategory(matched);
     setPendingNote(transaction.note ?? "");
     setEditingCategory(true);
   }
@@ -240,10 +245,20 @@ function TransactionRow({
     setEditingCategory(false);
   }
 
+  const roundedClass = isUnclassified
+    ? [
+        isFirst && isLast ? "rounded-2xl" :
+        isFirst ? "rounded-t-2xl" :
+        isLast ? "rounded-b-2xl" : "",
+      ].filter(Boolean).join(" ")
+    : "";
+
   return (
     <div
       className={`flex items-center gap-3 px-4 py-3.5 ${
-        isUnclassified ? "bg-amber-50 border-l-2 border-amber-400" : ""
+        isUnclassified
+          ? `bg-amber-50 border-l-2 border-amber-400 ${roundedClass}`
+          : ""
       }`}
     >
       <div className="relative flex-shrink-0">
@@ -270,13 +285,13 @@ function TransactionRow({
                 {time && <span>{time} • </span>}
                 <select
                   autoFocus
-                  value={pendingCategory.name}
-                  onChange={(e) =>
+                  value={pendingCategory._id}
+                  onChange={(e) => {
                     setPendingCategory(
                       categories.find((c) => c._id === e.target.value) ??
                         categories[0]
-                    )
-                  }
+                    );
+                  }}
                   className="text-violet-500 text-xs outline-none bg-transparent cursor-pointer"
                 >
                   {categories.map((cat) => (
@@ -520,6 +535,11 @@ function TransactionsContent() {
         </div>
       </div>
 
+      {/* Stats cards */}
+      <div className="max-w-[1024px] w-full mx-auto px-4 pt-4">
+        <StatsCards date={startDate} />
+      </div>
+
       {/* Transactions list */}
       <div className="flex-1 max-w-[1024px] w-full mx-auto px-4 py-4 flex flex-col gap-4">
         {isError ? (
@@ -552,12 +572,14 @@ function TransactionsContent() {
                 {label}
               </p>
               <div className="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
-                {items.map((tx) => (
+                {items.map((tx, i) => (
                   <TransactionRow
                     key={tx._id}
                     transaction={tx}
                     expenseCategories={expenseCategories}
                     incomeCategories={incomeCategories}
+                    isFirst={i === 0}
+                    isLast={i === items.length - 1}
                   />
                 ))}
               </div>

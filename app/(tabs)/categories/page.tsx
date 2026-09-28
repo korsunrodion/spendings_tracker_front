@@ -17,6 +17,7 @@ import {
   useUpdateCategoryPositions,
 } from "@/lib/hooks/useCategories";
 import type { Category, CategoryGroup } from "@/lib/schemas/category";
+import { StatsCards } from "@/components/StatsCards";
 import {
   Button,
   Popover,
@@ -802,6 +803,11 @@ export default function CategoriesPage() {
               </PopoverContent>
             </Popover>
           </div>
+        </div>
+
+        {/* Stats cards */}
+        <div className="px-4 pb-4">
+          <StatsCards date={startDate} />
         </div>
 
         {/* Groups list */}
